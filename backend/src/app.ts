@@ -4,7 +4,6 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import morgan from "morgan";
-import { env } from "./config/env.js";
 import { notFoundHandler } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { authRouter } from "./routes/authRoutes.js";
@@ -13,14 +12,27 @@ import { followRouter } from "./routes/followRoutes.js";
 import { postRouter } from "./routes/postRoutes.js";
 import { storyRouter } from "./routes/storyRoutes.js";
 import { uploadRouter } from "./routes/uploadRoutes.js";
+import { env } from "./config/env.js";
 
 export function createApp() {
   const app = express();
+  const allowedOrigins = Array.from(
+    new Set([env.CLIENT_ORIGIN, "http://localhost:5173", "http://127.0.0.1:5173"])
+  );
 
   app.use(
     cors({
-      origin: env.CLIENT_ORIGIN,
-      credentials: true
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error("Not allowed by CORS"));
+      },
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "x-retry"],
+      optionsSuccessStatus: 204
     })
   );
   app.use(helmet());
@@ -35,16 +47,16 @@ export function createApp() {
       limit: 100
     })
   );
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: true });
+  });
+
   app.use("/api/auth", authRouter);
   app.use("/api/users", userRouter);
   app.use("/api/follows", followRouter);
   app.use("/api", postRouter);
   app.use("/api/stories", storyRouter);
   app.use("/api/uploads", uploadRouter);
-
-  app.get("/api/health", (_req, res) => {
-    res.json({ ok: true });
-  });
 
   // Routes will be mounted here in later todos.
 

@@ -187,7 +187,7 @@ export async function addCommentHandler(req: Request, res: Response) {
   try {
     const parsed = commentSchema.parse(req.body);
     const session = await mongoose.startSession();
-    let created;
+    let created: Awaited<ReturnType<typeof CommentModel.create>> | undefined;
     try {
       await session.withTransaction(async () => {
         created = await CommentModel.create(
@@ -296,8 +296,21 @@ async function loadLikesForUser(posts: Array<{ _id: unknown }>, userId: string) 
 }
 
 function serializePost(
-  post: any,
-  author: any | undefined,
+  post: {
+    _id: unknown;
+    caption?: string | null;
+    createdAt: Date;
+    likeCount?: number;
+    media?: unknown;
+  },
+  author:
+    | {
+        _id: unknown;
+        username: string;
+        name?: string | null;
+        avatarUrl?: string | null;
+      }
+    | undefined,
   likedByMe: boolean,
   commentCount: number
 ) {

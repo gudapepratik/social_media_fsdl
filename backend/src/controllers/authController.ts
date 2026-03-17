@@ -133,9 +133,18 @@ export async function meHandler(req: Request, res: Response) {
   return res.json({ user: serializeUser(user) });
 }
 
-function serializeUser(user: { id: string; username: string; email: string; name?: string | null; bio?: string | null; avatarUrl?: string | null }) {
+function serializeUser(user: {
+  id?: string;
+  _id?: unknown;
+  username: string;
+  email: string;
+  name?: string | null;
+  bio?: string | null;
+  avatarUrl?: string | null;
+}) {
+  const resolvedId = user.id ?? String(user._id ?? "");
   return {
-    id: user.id,
+    id: resolvedId,
     username: user.username,
     email: user.email,
     name: user.name ?? "",

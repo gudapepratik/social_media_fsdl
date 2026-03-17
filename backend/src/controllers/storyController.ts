@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import mongoose from "mongoose";
 import { z } from "zod";
 import { StoryModel } from "../models/Story.js";
 import { FollowModel } from "../models/Follow.js";
@@ -19,6 +20,15 @@ const createStorySchema = z.object({
 });
 
 const STORY_TTL_HOURS = 24;
+
+type StoryLike = {
+  _id: unknown;
+  authorId: unknown;
+  caption?: string | null;
+  createdAt: Date;
+  expiresAt: Date;
+  media: unknown;
+};
 
 export async function createStoryHandler(req: Request, res: Response) {
   if (!req.userId) {
@@ -51,7 +61,7 @@ export async function storiesFeedHandler(req: Request, res: Response) {
   }
   const following = await FollowModel.find({ followerId: req.userId }, { followingId: 1 }).lean();
   const authorIds = following.map((f) => f.followingId);
-  authorIds.push(req.userId);
+  authorIds.push(new mongoose.Types.ObjectId(req.userId));
 
   const now = new Date();
   const stories = await StoryModel.find({
@@ -79,7 +89,7 @@ export async function userStoriesHandler(req: Request, res: Response) {
   return res.json({ buckets: grouped });
 }
 
-async function groupStoriesWithAuthors(stories: Array<{ authorId: unknown }>) {
+async function groupStoriesWithAuthors(stories: StoryLike[]) {
   const ids = Array.from(new Set(stories.map((s) => String(s.authorId))));
   const authors = await UserModel.find(
     { _id: { $in: ids } },
@@ -89,13 +99,23 @@ async function groupStoriesWithAuthors(stories: Array<{ authorId: unknown }>) {
   for (const a of authors) {
     authorMap.set(String(a._id), a);
   }
-  const byAuthor = new Map<string, any[]>();
+  const byAuthor = new Map<string, typeof stories>();
   for (const s of stories) {
     const key = String(s.authorId);
     if (!byAuthor.has(key)) byAuthor.set(key, []);
     byAuthor.get(key)!.push(s);
   }
-  const buckets: any[] = [];
+  const buckets: Array<{
+    author:
+      | {
+          id: string;
+          username: string;
+          name: string;
+          avatarUrl: string;
+        }
+      | undefined;
+    stories: Array<ReturnType<typeof serializeStory>>;
+  }> = [];
   for (const [authorId, list] of byAuthor) {
     const author = authorMap.get(authorId);
     buckets.push({
@@ -111,7 +131,17 @@ async function groupStoriesWithAuthors(stories: Array<{ authorId: unknown }>) {
   return buckets;
 }
 
-function serializeStory(story: any, author: any | undefined) {
+function serializeStory(
+  story: StoryLike,
+  author:
+    | {
+        _id: unknown;
+        username: string;
+        name?: string | null;
+        avatarUrl?: string | null;
+      }
+    | undefined
+) {
   return {
     id: String(story._id),
     caption: story.caption ?? "",
